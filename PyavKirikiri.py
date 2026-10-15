@@ -59,7 +59,7 @@ LANG = {
         "status_loaded":"已加载: {}",
         "status_adding": "已添加 {} 个文件",
         "status_playing":"正在播放: {}",
-        "about_text":   "大聪明播放器 (PyAV 后端)\nKIRIKIRI风格， DeepSeek Tongyi Qianwen技术编写",
+        "about_text":   "大聪明播放器 (PyAV 后端)\nKIRIKIRI风格\n基于 DeepSeek Tongyi Qianwen 编写",
         "setting_title":      "设置",
         "setting_vol_up":     "增大音量",
         "setting_vol_down":   "减小音量",
@@ -81,6 +81,7 @@ LANG = {
         "msg_unmuted":        "已取消静音",
         "msg_vol_up":         "音量增大: {}%",
         "msg_vol_down":       "音量减小: {}%",
+        "file_filter":        "视频文件 (*.mp4 *.avi *.mkv);;音频文件 (*.flac *.ogg *.mp3);;所有文件 (*.*)",
     },
     "en": {
         "title":        "Smart Player - Kirikiri Style",
@@ -114,7 +115,7 @@ LANG = {
         "status_loaded":"Loaded: {}",
         "status_adding": "Added {} file(s)",
         "status_playing":"Playing: {}",
-        "about_text":   "Smart Player (PyAV backend)\nKIRIKIRI style, powered by DeepSeek Tongyi Qianwen technology",
+        "about_text":   "Smart Player (PyAV backend)\nKIRIKIRI style\nBased on DeepSeek Tongyi Qianwen",
         "setting_title":      "Settings",
         "setting_vol_up":     "Volume Up",
         "setting_vol_down":   "Volume Down",
@@ -136,6 +137,7 @@ LANG = {
         "msg_unmuted":        "Unmuted",
         "msg_vol_up":         "Volume up: {}%",
         "msg_vol_down":       "Volume down: {}%",
+        "file_filter":        "Video (*.mp4 *.avi *.mkv);;Audio (*.flac *.ogg *.mp3);;All Files (*.*)",
     },
 }
 
@@ -730,7 +732,7 @@ class MediaPlayer(QMainWindow):
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self, self.tr("menu_open"), "",
-            "Video (*.mp4 *.avi *.mkv *.mov *.flv *.wmv);;All (*.*)")
+            self.tr("file_filter"))
         if file_path:
             self.current_file = file_path
             self._start_decode(file_path, 0.0)
@@ -744,7 +746,7 @@ class MediaPlayer(QMainWindow):
     def add_to_playlist(self):
         files, _ = QFileDialog.getOpenFileNames(
             self, self.tr("menu_add"), "",
-            "Video (*.mp4 *.avi *.mkv *.mov *.flv *.wmv);;All (*.*)")
+            self.tr("file_filter"))
         for f in files:
             self.playlist.addItem(f)
         self.bottom_text.setText(
