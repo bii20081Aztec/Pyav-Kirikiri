@@ -35,7 +35,7 @@ LANG = {
         "menu_exit":    "退出",
         "menu_screen":  "画面",
         "menu_full":    "全屏",
-        "menu_size":    "窗口大小",
+        "menu_size":    "窗口",
         "menu_ratio":   "宽高比",
         "menu_lang":    "语言",
         "menu_lang_zh": "简体中文",
@@ -43,7 +43,7 @@ LANG = {
         "menu_tools":   "工具",
         "menu_setting": "设置",
         "menu_hotkey":  "快捷键",
-        "menu_help":    "說明",
+        "menu_help":    "说明",
         "menu_about":   "关于",
         "menu_home":    "作者主页",
         "menu_bili":    "B站主页",
@@ -59,7 +59,28 @@ LANG = {
         "status_loaded":"已加载: {}",
         "status_adding": "已添加 {} 个文件",
         "status_playing":"正在播放: {}",
-        "about_text":   "大聪明播放器 (PyAV 后端)\nKIRIKIRI风格， DeepSeek技术编写",
+        "about_text":   "大聪明播放器 (PyAV 后端)\nKIRIKIRI风格， DeepSeek Tongyi Qianwen技术编写",
+        "setting_title":      "设置",
+        "setting_vol_up":     "增大音量",
+        "setting_vol_down":   "减小音量",
+        "setting_vol_cur":    "当前音量: {}%",
+        "setting_disable_hk": "禁用快捷键",
+        "setting_enable_hk":  "启用快捷键",
+        "setting_hk_enabled": "快捷键已启用",
+        "setting_hk_disabled":"快捷键已禁用",
+        "hotkey_title":       "快捷键说明",
+        "hotkey_play":        "播放",
+        "hotkey_pause":       "暂停",
+        "hotkey_mute":        "静音",
+        "hotkey_vol_up":      "音量增大",
+        "hotkey_vol_down":    "音量减小",
+        "ratio_43":           "4:3",
+        "ratio_169":          "16:9",
+        "msg_ratio_set":      "宽高比已切换为: {}",
+        "msg_muted":          "已静音",
+        "msg_unmuted":        "已取消静音",
+        "msg_vol_up":         "音量增大: {}%",
+        "msg_vol_down":       "音量减小: {}%",
     },
     "en": {
         "title":        "Smart Player - Kirikiri Style",
@@ -69,7 +90,7 @@ LANG = {
         "menu_exit":    "Exit",
         "menu_screen":  "Screen",
         "menu_full":    "Fullscreen",
-        "menu_size":    "Window Size",
+        "menu_size":    "Window",
         "menu_ratio":   "Aspect Ratio",
         "menu_lang":    "Text Language",
         "menu_lang_zh": "简体中文",
@@ -93,14 +114,35 @@ LANG = {
         "status_loaded":"Loaded: {}",
         "status_adding": "Added {} file(s)",
         "status_playing":"Playing: {}",
-        "about_text":   "Smart Player (PyAV backend)\nKIRIKIRI style, powered by DeepSeek technology",
+        "about_text":   "Smart Player (PyAV backend)\nKIRIKIRI style, powered by DeepSeek Tongyi Qianwen technology",
+        "setting_title":      "Settings",
+        "setting_vol_up":     "Volume Up",
+        "setting_vol_down":   "Volume Down",
+        "setting_vol_cur":    "Current Volume: {}%",
+        "setting_disable_hk": "Disable Hotkeys",
+        "setting_enable_hk":  "Enable Hotkeys",
+        "setting_hk_enabled": "Hotkeys enabled",
+        "setting_hk_disabled":"Hotkeys disabled",
+        "hotkey_title":       "Hotkey Reference",
+        "hotkey_play":        "Play",
+        "hotkey_pause":       "Pause",
+        "hotkey_mute":        "Mute",
+        "hotkey_vol_up":      "Volume Up",
+        "hotkey_vol_down":    "Volume Down",
+        "ratio_43":           "4:3",
+        "ratio_169":          "16:9",
+        "msg_ratio_set":      "Aspect ratio set to: {}",
+        "msg_muted":          "Muted",
+        "msg_unmuted":        "Unmuted",
+        "msg_vol_up":         "Volume up: {}%",
+        "msg_vol_down":       "Volume down: {}%",
     },
 }
 
 AUTHOR_HOME = "https://space.bilibili.com/1685065897"
 PLACEHOLDER_LINKS = {
     "bili":   "https://space.bilibili.com/1685065897",
-    "github": "https://example.com/github",
+    "github": "https://github.com/bii20081Aztec/Pyav-Kirikiri",
 }
 
 
@@ -168,7 +210,7 @@ class AudioPlayer(threading.Thread):
             self.buffer.append(samples)
 
     def set_volume(self, v):
-        self.volume = max(0.0, min(1.0, v))
+        self.volume = max(0.0, min(5.0, v))
 
     def set_pause(self, p):
         self.paused = p
@@ -201,6 +243,10 @@ class MediaPlayer(QMainWindow):
         self.pause_time = 0.0
         self.duration = 0.0
         self.audio = AudioPlayer()
+        self.muted = False
+        self._prev_volume = self.volume
+        self.aspect_ratio = None        # None = 自适应, "4:3", "16:9"
+        self.hotkeys_enabled = True     # 快捷键默认启用
         self.decode_thread = None
         self.decode_stop = threading.Event()
         self._pending = 0           # 已解码但还没显示的帧数
@@ -208,6 +254,7 @@ class MediaPlayer(QMainWindow):
         self._max_pending = 60       # 最多领先主线程 2 帧
 
         self.setGeometry(100, 100, 1000, 700)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet(self.get_win32_style())
 
         self.setup_menu()
@@ -296,11 +343,21 @@ class MediaPlayer(QMainWindow):
 
         self.m_screen = menubar.addMenu("")
         self.a_full  = QAction("", self)
+        self.a_full.triggered.connect(self.toggle_fullscreen)
         self.a_size  = QAction("", self)
-        self.a_ratio = QAction("", self)
+        self.a_size.triggered.connect(self.set_window_mode)
+
+        # 宽高比 → 子菜单
+        self.m_ratio = QMenu("")
+        self.a_ratio_43  = QAction("", self)
+        self.a_ratio_43.triggered.connect(lambda: self.set_aspect_ratio("4:3"))
+        self.a_ratio_169 = QAction("", self)
+        self.a_ratio_169.triggered.connect(lambda: self.set_aspect_ratio("16:9"))
+        self.m_ratio.addAction(self.a_ratio_43)
+        self.m_ratio.addAction(self.a_ratio_169)
         self.m_screen.addAction(self.a_full)
         self.m_screen.addAction(self.a_size)
-        self.m_screen.addAction(self.a_ratio)
+        self.m_screen.addMenu(self.m_ratio)
 
         self.m_lang = menubar.addMenu("")
         self.a_lang_zh = QAction("", self)
@@ -312,9 +369,9 @@ class MediaPlayer(QMainWindow):
 
         self.m_tools = menubar.addMenu("")
         self.a_setting = QAction("", self)
-        self.a_setting.triggered.connect(self.dummy_action)
+        self.a_setting.triggered.connect(self.show_settings)
         self.a_hotkey = QAction("", self)
-        self.a_hotkey.triggered.connect(self.dummy_action)
+        self.a_hotkey.triggered.connect(self.show_hotkeys)
         self.m_tools.addAction(self.a_setting)
         self.m_tools.addAction(self.a_hotkey)
 
@@ -404,7 +461,7 @@ class MediaPlayer(QMainWindow):
         self.time_label.setMinimumWidth(100)
 
         self.volume_slider = QSlider(Qt.Horizontal)
-        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setRange(0, 500)
         self.volume_slider.setValue(self.volume)
         self.volume_slider.setMaximumWidth(80)
         self.volume_slider.valueChanged.connect(self.set_volume)
@@ -479,7 +536,7 @@ class MediaPlayer(QMainWindow):
         for attr, key in [
             ("a_open", "menu_open"), ("a_add", "menu_add"),
             ("a_exit", "menu_exit"), ("a_full", "menu_full"),
-            ("a_size", "menu_size"), ("a_ratio", "menu_ratio"),
+            ("a_size", "menu_size"),
             ("a_lang_zh", "menu_lang_zh"), ("a_lang_en", "menu_lang_en"),
             ("a_setting", "menu_setting"), ("a_hotkey", "menu_hotkey"),
             ("a_about", "menu_about"), ("a_home", "menu_home"),
@@ -498,6 +555,14 @@ class MediaPlayer(QMainWindow):
             obj = getattr(self, attr, None)
             if obj is not None:
                 obj.setText(t(key))
+
+        # 子菜单和子项
+        if hasattr(self, 'm_ratio'):
+            self.m_ratio.setTitle(t("menu_ratio"))
+        if hasattr(self, 'a_ratio_43'):
+            self.a_ratio_43.setText(t("ratio_43"))
+        if hasattr(self, 'a_ratio_169'):
+            self.a_ratio_169.setText(t("ratio_169"))
 
     # --------------------------------------------------------
     # 播放核心
@@ -632,8 +697,33 @@ class MediaPlayer(QMainWindow):
             if self._pending > 0:
                 self._pending -= 1
         qimg = QImage(img.data, w, h, 3 * w, QImage.Format_RGB888)
+        label_size = self.video_label.size()
+
+        if self.aspect_ratio == "4:3":
+            # 按 4:3 裁切显示区域
+            target_w = label_size.height() * 4 // 3
+            target_h = label_size.height()
+            if target_w > label_size.width():
+                target_w = label_size.width()
+                target_h = label_size.width() * 3 // 4
+        elif self.aspect_ratio == "16:9":
+            # 按 16:9 裁切显示区域
+            target_w = label_size.height() * 16 // 9
+            target_h = label_size.height()
+            if target_w > label_size.width():
+                target_w = label_size.width()
+                target_h = label_size.width() * 9 // 16
+        else:
+            # 自适应：保持原始比例
+            pix = QPixmap.fromImage(qimg).scaled(
+                label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.video_label.setPixmap(pix)
+            return
+
+        from PyQt5.QtCore import QSize
         pix = QPixmap.fromImage(qimg).scaled(
-            self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            QSize(target_w, target_h),
+            Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_label.setPixmap(pix)
 
     # --------------------------------------------------------
@@ -696,6 +786,8 @@ class MediaPlayer(QMainWindow):
     def set_volume(self, value):
         self.volume = value
         self.audio.set_volume(value / 100.0)
+        if self.muted and value > 0:
+            self.muted = False
         self.volume_label.setText("🔊" if value > 0 else "🔇")
 
     # --------------------------------------------------------
@@ -729,6 +821,198 @@ class MediaPlayer(QMainWindow):
 
     def dummy_action(self):
         self.bottom_text.setText("TODO")
+
+    # --------------------------------------------------------
+    # 全屏 / 窗口 / 宽高比
+    # --------------------------------------------------------
+    def toggle_fullscreen(self):
+        """切换到全屏模式"""
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def set_window_mode(self):
+        """切换到窗口模式"""
+        if self.isFullScreen():
+            self.showNormal()
+
+    def set_aspect_ratio(self, ratio):
+        """切换宽高比 (4:3 / 16:9)"""
+        self.aspect_ratio = ratio
+        self.bottom_text.setText(self.tr("msg_ratio_set").format(ratio))
+
+    # --------------------------------------------------------
+    # 设置弹窗
+    # --------------------------------------------------------
+    def show_settings(self):
+        """显示设置对话框：禁用/启用快捷键、增大/减小音量"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QLabel
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(self.tr("setting_title"))
+        dlg.setFixedSize(320, 260)
+        layout = QVBoxLayout(dlg)
+
+        vol_display = QLabel(self.tr("setting_vol_cur").format(self.volume))
+        vol_display.setAlignment(Qt.AlignCenter)
+        vol_display.setStyleSheet("font-size: 14px; padding: 6px;")
+        layout.addWidget(vol_display)
+
+        btn_style = "font-size: 13px; padding: 8px; min-width: 200px;"
+
+        # 禁用快捷键
+        btn_disable = QPushButton(self.tr("setting_disable_hk"))
+        btn_disable.setStyleSheet(btn_style)
+        def on_disable_hk():
+            self.hotkeys_enabled = False
+            self.bottom_text.setText(self.tr("setting_hk_disabled"))
+        btn_disable.clicked.connect(on_disable_hk)
+        layout.addWidget(btn_disable, alignment=Qt.AlignCenter)
+
+        # 启用快捷键
+        btn_enable = QPushButton(self.tr("setting_enable_hk"))
+        btn_enable.setStyleSheet(btn_style)
+        def on_enable_hk():
+            self.hotkeys_enabled = True
+            self.bottom_text.setText(self.tr("setting_hk_enabled"))
+        btn_enable.clicked.connect(on_enable_hk)
+        layout.addWidget(btn_enable, alignment=Qt.AlignCenter)
+
+        # 增大音量
+        btn_vol_up = QPushButton(self.tr("setting_vol_up"))
+        btn_vol_up.setStyleSheet(btn_style)
+        def on_vol_up():
+            self.volume = min(500, self.volume + 50)
+            self.audio.set_volume(self.volume / 100.0)
+            self.volume_slider.setValue(self.volume)
+            vol_display.setText(self.tr("setting_vol_cur").format(self.volume))
+            self.bottom_text.setText(self.tr("msg_vol_up").format(self.volume))
+        btn_vol_up.clicked.connect(on_vol_up)
+        layout.addWidget(btn_vol_up, alignment=Qt.AlignCenter)
+
+        # 减小音量
+        btn_vol_down = QPushButton(self.tr("setting_vol_down"))
+        btn_vol_down.setStyleSheet(btn_style)
+        def on_vol_down():
+            self.volume = max(0, self.volume - 50)
+            self.audio.set_volume(self.volume / 100.0)
+            self.volume_slider.setValue(self.volume)
+            vol_display.setText(self.tr("setting_vol_cur").format(self.volume))
+            self.bottom_text.setText(self.tr("msg_vol_down").format(self.volume))
+        btn_vol_down.clicked.connect(on_vol_down)
+        layout.addWidget(btn_vol_down, alignment=Qt.AlignCenter)
+
+        # 关闭按钮
+        btn_close = QPushButton("OK")
+        btn_close.clicked.connect(dlg.close)
+        layout.addWidget(btn_close, alignment=Qt.AlignCenter)
+
+        dlg.exec_()
+
+    # --------------------------------------------------------
+    # 快捷键弹窗
+    # --------------------------------------------------------
+    def show_hotkeys(self):
+        """显示快捷键说明对话框"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(self.tr("hotkey_title"))
+        dlg.setFixedSize(340, 280)
+        layout = QVBoxLayout(dlg)
+
+        shortcuts = [
+            ("P", self.tr("hotkey_play")),
+            ("S", self.tr("hotkey_pause")),
+            ("M", self.tr("hotkey_mute")),
+            ("U", self.tr("hotkey_vol_up")),
+            ("D", self.tr("hotkey_vol_down")),
+        ]
+
+        title_label = QLabel(self.tr("hotkey_title"))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet(
+            "font-size: 15px; font-weight: bold; padding: 8px;")
+        layout.addWidget(title_label)
+
+        for key, desc in shortcuts:
+            row = QLabel(f"  {key}    —    {desc}")
+            row.setStyleSheet(
+                "font-size: 13px; padding: 4px 12px; "
+                "font-family: 'Consolas', 'Microsoft YaHei';")
+            layout.addWidget(row)
+
+        layout.addSpacing(10)
+        btn_close = QPushButton("OK")
+        btn_close.clicked.connect(dlg.close)
+        layout.addWidget(btn_close, alignment=Qt.AlignCenter)
+
+        dlg.exec_()
+
+    # --------------------------------------------------------
+    # 键盘快捷键
+    # --------------------------------------------------------
+    def keyPressEvent(self, event):
+        key = event.key()
+        if self.hotkeys_enabled:
+            if key == Qt.Key_P:
+                self.play()
+                return
+            elif key == Qt.Key_S:
+                self.pause()
+                return
+            elif key == Qt.Key_M:
+                self.toggle_mute()
+                return
+            elif key == Qt.Key_U:
+                self.volume_up()
+                return
+            elif key == Qt.Key_D:
+                self.volume_down()
+                return
+        # Esc 始终可用：退出全屏
+        if key == Qt.Key_Escape and self.isFullScreen():
+            self.showNormal()
+            return
+        super().keyPressEvent(event)
+
+    def toggle_mute(self):
+        """切换静音"""
+        if self.muted:
+            self.muted = False
+            self.volume = self._prev_volume
+            self.audio.set_volume(self.volume / 100.0)
+            self.volume_slider.setValue(self.volume)
+            self.volume_label.setText("🔊")
+            self.bottom_text.setText(self.tr("msg_unmuted"))
+        else:
+            self._prev_volume = self.volume
+            self.muted = True
+            self.audio.set_volume(0.0)
+            self.volume_slider.setValue(0)
+            self.volume_label.setText("🔇")
+            self.bottom_text.setText(self.tr("msg_muted"))
+
+    def volume_up(self):
+        """音量增大（+10%）"""
+        if self.muted:
+            self.toggle_mute()
+        self.volume = min(500, self.volume + 10)
+        self.audio.set_volume(self.volume / 100.0)
+        self.volume_slider.setValue(self.volume)
+        self.volume_label.setText("🔊")
+
+    def volume_down(self):
+        """音量减小（-10%）"""
+        if self.muted:
+            self.toggle_mute()
+        self.volume = max(0, self.volume - 10)
+        self.audio.set_volume(self.volume / 100.0)
+        self.volume_slider.setValue(self.volume)
+        self.volume_label.setText("🔊" if self.volume > 0 else "🔇")
+        if self.volume == 0:
+            self.bottom_text.setText(self.tr("msg_muted"))
 
     def closeEvent(self, event):
         self.frame_timer.stop()
