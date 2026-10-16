@@ -15,8 +15,19 @@
 ## Requirements
 
 - Python 3.12
-- Windows 10/11 或 Linux
+- Windows 7/10/11 或 Linux
 
+## Windows 7 兼容说明
+
+虽然官方 Python 3.12 不支持 Windows 7，但本项目经过实测，可以在 Windows 7 SP1 上运行。
+
+前提条件：
+- 必须安装 VxKex（或类似的 Win7 扩展内核兼容层）
+- 锁定 Python 3.12
+- 使用兼容版本的 PyAV 和 NumPy
+- 推荐使用 PyInstaller 打包发布
+
+如果不使用 VxKex，Windows 7 下可能无法正常启动或解码。
 Windows 下最稳，代码里有些路径没做跨平台适配。  
 Linux 下也能跑，建议直接跑源码，成品限制比较多。
 
